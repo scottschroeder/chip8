@@ -1,6 +1,18 @@
 [package]
 name = "chip8"
 version = "0.1.0"
-authors = ["Scott Schroeder <scott19904@gmail.com>"]
+authors = ["Scott Schroeder <scottschroeder@sent.com>"]
+
+[lib]
+name = "c8lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "c8e"
+path = "c8e/main.rs"
 
 [dependencies]
+error-chain = "0.10.0"
+slog = "1.5.2"
+slog-term = "1.5.0"
+clap = "2.22.0"
