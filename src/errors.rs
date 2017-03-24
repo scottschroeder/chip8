@@ -10,12 +10,12 @@ use std::io;
 // Create the Error, ErrorKind, ResultExt, and Result types
 error_chain! {
     foreign_links {
-        IOError(io::Error);
+        IOError(io::Error) #[doc = "A wrapper around the `std::io::Error`"];
     }
     errors {
-        // UserForbidden(t: String) {
-        //     description("User attempted operation without proper credentials")
-        //         display("{}", t)
-        // }
+        UnrecognizedOpcode(b1: u8, b2: u8) {
+            description("Could not disassemble Opcode")
+                display("Opcode: 0x{:02x}{:02x}", b1, b2)
+        }
     }
 }

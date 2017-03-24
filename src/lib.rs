@@ -1,14 +1,21 @@
+#![warn(missing_docs)]
+#![recursion_limit = "1024"]
+
+//! Everything needed to build a Chip8 System
+
 #[macro_use]
 extern crate error_chain;
-extern crate slog;
-extern crate slog_term;
+#[macro_use]
+pub extern crate slog;
+extern crate slog_stdlog;
 
-mod loader;
+mod emulator;
 mod errors;
+mod cpu;
 
-use errors::*;
 
-pub use loader::load_rom;
+pub use emulator::Chip8;
+pub use errors::*;
 
 
 #[test]
