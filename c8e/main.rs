@@ -58,7 +58,9 @@ fn main() {
 
     let rom_path = matches.value_of("rom_path").unwrap(); //Required arg
     let mut chip8 = c8lib::Chip8::init(Some(log));
-    chip8.load_rom(PathBuf::from(rom_path)).unwrap();
-    mem_dump(&chip8.rom[..], 0);
-    chip8.disassemble(0, 1000);
+    let rom_bytes = chip8.load_rom(PathBuf::from(rom_path)).unwrap();
+    chip8.disassemble(rom_bytes);
+    chip8.run();
+    //println!("{:?}", chip8);
+    //mem_dump(&chip8.rom[..], 0);
 }

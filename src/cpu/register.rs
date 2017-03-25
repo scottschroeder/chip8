@@ -1,6 +1,7 @@
 //
 // Rust Core Imports
 //
+use std::fmt;
 
 //
 // Third Party Imports
@@ -11,43 +12,31 @@
 //
 //use errors::*;
 
-pub const GPREGS: [Reg; 16] = [
-    Reg::V0,
-    Reg::V1,
-    Reg::V2,
-    Reg::V3,
-    Reg::V4,
-    Reg::V5,
-    Reg::V6,
-    Reg::V7,
-    Reg::V8,
-    Reg::V9,
-    Reg::VA,
-    Reg::VB,
-    Reg::VC,
-    Reg::VD,
-    Reg::VE,
-    Reg::VF,
-];
 
 #[derive(Debug, Clone, Copy)]
-pub enum Reg{
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    VA,
-    VB,
-    VC,
-    VD,
-    VE,
-    VF,
+pub enum Reg {
+    V0 = 0x0,
+    V1 = 0x1,
+    V2 = 0x2,
+    V3 = 0x3,
+    V4 = 0x4,
+    V5 = 0x5,
+    V6 = 0x6,
+    V7 = 0x7,
+    V8 = 0x8,
+    V9 = 0x9,
+    VA = 0xa,
+    VB = 0xb,
+    VC = 0xc,
+    VD = 0xd,
+    VE = 0xe,
+    VF = 0xf,
+}
+
+impl fmt::Display for Reg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub fn reg(x: u8) -> Reg {
@@ -68,6 +57,6 @@ pub fn reg(x: u8) -> Reg {
         0x0D => Reg::VD,
         0x0E => Reg::VE,
         0x0F => Reg::VF,
-        _ => panic!("Register {:02x} not defined!", x)
+        _ => panic!("Register {:02x} not defined!", x),
     }
 }

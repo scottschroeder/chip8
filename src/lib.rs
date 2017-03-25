@@ -8,10 +8,12 @@ extern crate error_chain;
 #[macro_use]
 pub extern crate slog;
 extern crate slog_stdlog;
+extern crate rand;
 
+mod cpu;
 mod emulator;
 mod errors;
-mod cpu;
+mod interconnect;
 
 
 pub use emulator::Chip8;

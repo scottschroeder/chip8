@@ -13,9 +13,9 @@ error_chain! {
         IOError(io::Error) #[doc = "A wrapper around the `std::io::Error`"];
     }
     errors {
-        UnrecognizedOpcode(b1: u8, b2: u8) {
+        UnrecognizedOpcode(instr: u16) {
             description("Could not disassemble Opcode")
-                display("Opcode: 0x{:02x}{:02x}", b1, b2)
+                display("Opcode: 0x{:04x}", instr)
         }
     }
 }
