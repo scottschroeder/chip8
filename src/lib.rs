@@ -5,9 +5,12 @@
 
 #[macro_use]
 extern crate error_chain;
+
 #[macro_use]
 pub extern crate slog;
 extern crate slog_stdlog;
+
+extern crate minifb;
 extern crate rand;
 
 mod cpu;

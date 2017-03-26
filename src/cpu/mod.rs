@@ -157,10 +157,11 @@ impl Cpu {
                 *self.reg(x) = randombyte & byte;
             }
             &Opcode::Draw(x, y, byte) => {
-                interconnect.draw_sprite(self.vi as _,
-                                         *self.reg(x) as _,
-                                         *self.reg(y) as _,
-                                         byte as _);
+                let collision = interconnect.draw_sprite(self.vi as _,
+                                                         *self.reg(x) as _,
+                                                         *self.reg(y) as _,
+                                                         byte as _);
+                *self.reg(Reg::VF) = if collision { 1 } else { 0 };
             }
             &Opcode::KeyEqSkip(x) => {
                 if interconnect.check_key(*self.reg(x) as _) {
@@ -176,7 +177,11 @@ impl Cpu {
                 *self.reg(x) = self.delay;
             }
             &Opcode::KeyGet(x) => {
-                *self.reg(x) = interconnect.get_key();
+                if let Some(key) = interconnect.get_key() {
+                    *self.reg(x) = key
+                } else {
+                    self.pc -= 2;
+                }
             }
             &Opcode::DelaySet(x) => {
                 self.delay = *self.reg(x) as _;
@@ -211,6 +216,15 @@ impl Cpu {
                     *self.reg(reg(idx as _)) = interconnect.read_byte(self.vi + (idx as u16));
                 }
             }
+        }
+    }
+
+    pub fn timer(&mut self) {
+        if self.delay > 0 {
+            self.delay -= 1;
+        }
+        if self.sound > 0 {
+            self.sound -= 1;
         }
     }
 
