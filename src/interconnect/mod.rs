@@ -175,15 +175,26 @@ impl Interconnect {
         ic
     }
 
+    pub fn display_keys(&self) -> String {
+        let mut result = "Keys [".to_string();
+        for i in 0..16 {
+            if self.keys[i] {
+                result.push_str(&format!("{:x}, ", i));
+            }
+        }
+        result.push_str(&format!("]"));
+        result
+    }
+
     pub fn get_font(&self, char: u8) -> usize {
         FONTS_START + char as usize * FONT_SIZE
     }
 
     #[inline]
     fn map_screen(&self, idx: usize, idy: usize) -> Option<usize> {
-        if idx > SCREEN_WIDTH || idy > SCREEN_HEIGHT {
-            return None
-        }
+        // if idx > SCREEN_WIDTH || idy > SCREEN_HEIGHT {
+        //     return None
+        // }
         //debug!(self.logger, "map_screen"; "loc" => format!("({}, {})", idx, idy));
         Some((idy % SCREEN_HEIGHT) * SCREEN_WIDTH + (idx % SCREEN_WIDTH))
     }

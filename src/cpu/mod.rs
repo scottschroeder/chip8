@@ -1,6 +1,7 @@
 //
 // Rust Core Imports
 //
+use std::fmt;
 
 //
 // Third Party Imports
@@ -29,11 +30,29 @@ pub struct Cpu {
     gpregs: [u8; 16],
     stack: [MemAddr; 16],
     vi: MemAddr,
-    pc: MemAddr,
+    pub pc: MemAddr,
     sp: usize,
     delay: u8,
     sound: u8,
     logger: slog::Logger,
+}
+
+fn bcd(n: u8) -> (u8, u8, u8) {
+    // 231 = M[vi] = 2; M[vi+1] = 3; M[vi+2] = 1
+    let ones = n % 10;
+    let tens = (n / 10) % 10;
+    let hundreds = n / 100;
+
+    (hundreds, tens, ones)
+}
+
+#[test]
+fn check_bcd() {
+    assert_eq!((2,3,4), bcd(234));
+    assert_eq!((0,0,4), bcd(4));
+    assert_eq!((2,0,1), bcd(201));
+    assert_eq!((1,0,1), bcd(101));
+    assert_eq!((1,3,9), bcd(139));
 }
 
 impl Cpu {
@@ -89,13 +108,8 @@ impl Cpu {
                 *self.reg(x) = byte;
             }
             &Opcode::AddByte(x, byte) => {
-                let (z, overflow) = self.reg(x).overflowing_add(byte);
+                let z = self.reg(x).wrapping_add(byte);
                 *self.reg(x) = z;
-                if overflow {
-                    *self.reg(Reg::VF) = 1;
-                } else {
-                    *self.reg(Reg::VF) = 0;
-                }
             }
             &Opcode::LoadReg(x, y) => {
                 *self.reg(x) = *self.reg(y);
@@ -122,25 +136,27 @@ impl Cpu {
                 let (z, overflow) = self.reg(x).overflowing_sub(*self.reg(y));
                 *self.reg(x) = z;
                 if overflow {
-                    *self.reg(Reg::VF) = 1;
-                } else {
                     *self.reg(Reg::VF) = 0;
+                } else {
+                    *self.reg(Reg::VF) = 1;
                 }
             }
             &Opcode::ShiftRight(x, y) => {
-                *self.reg(x) = *self.reg(y) >> 1;
+                *self.reg(Reg::VF) = *self.reg(x) & 0x1;
+                *self.reg(x) = *self.reg(x) >> 1;
             }
             &Opcode::MathSubN(x, y) => {
                 let (z, overflow) = self.reg(y).overflowing_sub(*self.reg(x));
                 *self.reg(x) = z;
                 if overflow {
-                    *self.reg(Reg::VF) = 1;
-                } else {
                     *self.reg(Reg::VF) = 0;
+                } else {
+                    *self.reg(Reg::VF) = 1;
                 }
             }
             &Opcode::ShiftLeft(x, y) => {
-                *self.reg(x) = *self.reg(y) << 1;
+                *self.reg(Reg::VF) = *self.reg(x) >> 7 & 0x1;
+                *self.reg(x) = *self.reg(x) << 1;
             }
             &Opcode::SkipNEqReg(x, y) => {
                 let value = *self.reg(y);
@@ -196,43 +212,61 @@ impl Cpu {
                 self.vi = interconnect.get_font(*self.reg(x)) as _;
             }
             &Opcode::BCD(x) => {
-                // 231 = M[vi] = 2; M[vi+1] = 3; M[vi+2] = 1
-                let n = *self.reg(x);
-                let ones = n % 10;
-                let tens = (n / 10) % 10;
-                let hundreds = *self.reg(x) / 100;
-
+                let (hundreds, tens, ones) = bcd(*self.reg(x));
                 interconnect.write_byte(self.vi, hundreds);
                 interconnect.write_byte(self.vi + 1, tens);
                 interconnect.write_byte(self.vi + 2, ones);
             }
             &Opcode::RegDump(x) => {
-                for idx in 0..(x as usize) {
+                for idx in 0..(x as usize + 1) {
                     interconnect.write_byte(self.vi + (idx as u16), *self.reg(reg(idx as _)));
                 }
             }
             &Opcode::RegLoad(x) => {
-                for idx in 0..(x as usize) {
+                for idx in 0..(x as usize + 1) {
                     *self.reg(reg(idx as _)) = interconnect.read_byte(self.vi + (idx as u16));
                 }
             }
         }
     }
 
-    pub fn timer(&mut self) {
-        if self.delay > 0 {
-            self.delay -= 1;
+    pub fn timer(&mut self, ticks: u64) {
+        let clock_ticks = if ticks > 0xFF {
+            0xFF
+        } else {
+            ticks as u8
+        };
+        if clock_ticks >= self.delay {
+            self.delay = 0;
+        } else {
+            self.delay -= clock_ticks;
         }
-        if self.sound > 0 {
-            self.sound -= 1;
+        if clock_ticks >= self.sound {
+            self.sound = 0;
+        } else {
+            self.sound -= clock_ticks;
         }
     }
 
     pub fn run_cycle(&mut self, interconnect: &mut Interconnect) {
         let instr = interconnect.read_halfword(self.pc);
-        self.pc += 2; // We moved two bytes
         let opcode = disassemble(instr).unwrap();
-        debug!(self.logger, "run_cycle"; "opcode" => format!("{}", opcode));
+        debug!(self.logger, "run_cycle"; "opcode" => format!("{}", opcode), "pc" => format!("0x{:04x}", self.pc));
+        self.pc += 2; // We moved two bytes
         self.execute_opcode(&opcode, interconnect);
+    }
+}
+
+impl fmt::Display for Cpu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "CPU: PC:0x{:04x} SP:{} Delay:{} Sound:{}", self.pc, self.sp, self.delay, self.sound)?;
+        writeln!(f, "\tstack: {:?}", self.stack)?;
+        for i in 0..0x10 {
+            let ireg = reg(i);
+            let ival = self.gpregs[i as usize];
+            writeln!(f, "\t{:?} = 0x{:02x}", ireg, ival)?;
+        }
+        writeln!(f, "\tVI = 0x{:04x}", self.vi)?;
+        Ok(())
     }
 }

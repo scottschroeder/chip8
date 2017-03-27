@@ -7,6 +7,8 @@ use std::io::Read;
 use std::thread;
 use std::time::{Duration, Instant};
 
+//TODO REMOVE
+use std::io;
 
 //
 // Third Party Imports
@@ -25,7 +27,7 @@ use interconnect::{Interconnect, SCREEN_WIDTH, SCREEN_HEIGHT};
 
 pub const PROGRAM_START: usize = 0x200;
 pub const NS_IN_SECOND: u64 = 1000000000;
-pub const CPU_CYCLE_NS: u64 = 2000000;
+pub const CPU_CYCLE_NS: u64 = 2000000; //500Hz
 pub const TIMER_CYCLE_NS: u64 = 16666667;
 pub type MemAddr = u16;
 
@@ -38,6 +40,8 @@ pub struct Chip8 {
     start_time: Instant,
     cpu_cycles: u64,
     timer_ticks: u64,
+    debug_mode: bool,
+    breakpoints: Vec<u16>,
 }
 
 fn key_map(key: Key) -> Option<usize> {
@@ -76,7 +80,9 @@ impl Chip8 {
             interconnect: Interconnect::init(int_logger),
             cpu_cycles: 0,
             timer_ticks: 0,
+            debug_mode: false,
             start_time: Instant::now(),
+            breakpoints: Vec::new(),
             window: Window::new("Chip8",
                                 SCREEN_WIDTH,
                                 SCREEN_HEIGHT,
@@ -95,6 +101,7 @@ impl Chip8 {
         self.interconnect.load_rom(path)
     }
 
+
     /// Run the emulator
     pub fn run(&mut self) {
         self.start_time = Instant::now();
@@ -107,43 +114,87 @@ impl Chip8 {
                                emulation_time.subsec_nanos() as u64;
             let ideal_cpu_cycles = emulation_ns / CPU_CYCLE_NS;
             let ideal_timer_ticks = emulation_ns / TIMER_CYCLE_NS;
-            while self.timer_ticks < ideal_timer_ticks {
-                self.cpu.timer();
-                self.timer_ticks += 1;
+
+
+            self.cpu.timer(ideal_timer_ticks - self.timer_ticks);
+            self.timer_ticks = ideal_timer_ticks;
+
+
+            if !self.debug_mode {
+                self.update_keys();
             }
             while self.cpu_cycles < ideal_cpu_cycles {
+                // if self.cpu.pc == 0x0278 {
+                //     self.debug_mode = true;
+                // }
+                if self.debug_mode {
+                    debug!(self.logger, "debug_cpu"; "keys" => self.interconnect.display_keys());
+                    println!("{}", self.cpu);
+                    for i in -5..10 {
+                        let memaddr = (self.cpu.pc as isize + 2*i) as u16;
+                        let instr = self.interconnect.read_halfword(memaddr);
+                        if i == 0 {
+                            print!("-->");
+                        }
+                        match cpu::disassemble(instr) {
+                            Ok(opcode) => println!("\t0x{:04x} {}", memaddr, opcode),
+                            Err(e) => println!("\t0x{:04x} UNRECOGNIZED {}", memaddr, e),
+                        }
+                    }
+
+                    // hack to input a key in debug mode
+                    // insert 0-16 to press key
+                    // insert something larger than 16 to clear keys
+                    let mut input_text = String::new();
+                    io::stdin()
+                        .read_line(&mut input_text)
+                        .expect("failed to read from stdin");
+                    match input_text.trim().parse::<usize>() {
+                        Ok(x) => {
+                            if x > 16 {
+                                self.interconnect.reset_keys();
+                            } else {
+                                self.interconnect.set_key(x);
+                            }
+                        }
+                        Err(e) => {
+                            println!("{:?}", e);
+                        }
+
+                    }
+                }
                 self.cpu.run_cycle(&mut self.interconnect);
                 self.cpu_cycles += 1;
-            }
-            self.interconnect.reset_keys();
-            if let Some(keys) = self.window.get_keys() {
-                //info!(self.logger, "run"; "keys" => format!("{:?}", keys));
-                for key in keys {
-                    if let Some(chip8_key) = key_map(key) {
-                        self.interconnect.set_key(chip8_key)
-                    }
+                if self.debug_mode {
+                    break;
                 }
             }
-            for (idx, pixel) in self.interconnect.graphics.iter().enumerate() {
-                buffer[idx] = if *pixel { 0x00ffffff } else { 0 };
-                if self.window.is_key_down(Key::Space) {
-                    if *pixel {
-                        print!("X");
-                    } else {
-                        print!(" ");
-                    }
-                    if idx % SCREEN_WIDTH == 0 {
-                        println!();
-                    }
-                }
-            }
-            if self.window.is_key_down(Key::Space) {
-                println!();
-                println!();
-            }
-            self.window.update_with_buffer(&buffer);
+
+            self.draw_screen(&mut buffer);
             thread::sleep(naptime);
         }
+    }
+
+    pub fn set_debug(&mut self, status: bool) {
+        self.debug_mode = status;
+    }
+
+    fn update_keys(&mut self) {
+        self.interconnect.reset_keys();
+        if let Some(keys) = self.window.get_keys() {
+            for key in keys {
+                if let Some(chip8_key) = key_map(key) {
+                    self.interconnect.set_key(chip8_key)
+                }
+            }
+        }
+    }
+
+    fn draw_screen(&mut self, buffer: &mut [u32; SCREEN_WIDTH * SCREEN_HEIGHT]) {
+        for (idx, pixel) in self.interconnect.graphics.iter().enumerate() {
+            buffer[idx] = if *pixel { 0x00ffffff } else { 0 };
+        }
+        self.window.update_with_buffer(buffer);
     }
 
     pub fn disassemble(&self, total: usize) {
