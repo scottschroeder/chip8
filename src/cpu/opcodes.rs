@@ -63,13 +63,6 @@ fn halfword2nibbles(x: u16) -> (u8, u8, u8, u8) {
 }
 
 #[inline]
-fn byte2nibble(x: u8) -> (u8, u8) {
-    let a = (x >> 4) & 0x0F;
-    let b = (x) & 0x0F;
-    (a, b)
-}
-
-#[inline]
 fn nibble2byte(a: u8, b: u8) -> u8 {
     (a << 4) | b & 0x0F
 }
@@ -177,17 +170,6 @@ fn halfwordsplit() {
 }
 
 #[test]
-fn bytesplit() {
-    assert_eq!((0x0, 0x0), byte2nibble(0x00));
-    assert_eq!((0x1, 0x0), byte2nibble(0x10));
-    assert_eq!((0x1, 0x1), byte2nibble(0x11));
-    assert_eq!((0x8, 0x3), byte2nibble(0x83));
-    assert_eq!((0xA, 0x3), byte2nibble(0xA3));
-    assert_eq!((0x4, 0xE), byte2nibble(0x4E));
-    assert_eq!((0xF, 0xF), byte2nibble(0xFF));
-}
-
-#[test]
 fn bytejoin() {
     assert_eq!(nibble2byte(0x0, 0x0), 0x00);
     assert_eq!(nibble2byte(0x1, 0x0), 0x10);
@@ -206,16 +188,6 @@ fn bytejoin() {
     assert_eq!(nibble2byte(0x34, 0x1E), 0x4E);
     assert_eq!(nibble2byte(0x4F, 0x6F), 0xFF);
 
-}
-
-#[test]
-fn byte_split_join() {
-    for i in 0..0xFF {
-        let byte = i as u8;
-        let (n1, n2) = byte2nibble(byte);
-        let re_byte = nibble2byte(n1, n2);
-        assert_eq!(byte, re_byte);
-    }
 }
 
 #[test]

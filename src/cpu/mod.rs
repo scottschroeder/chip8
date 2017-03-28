@@ -48,11 +48,11 @@ fn bcd(n: u8) -> (u8, u8, u8) {
 
 #[test]
 fn check_bcd() {
-    assert_eq!((2,3,4), bcd(234));
-    assert_eq!((0,0,4), bcd(4));
-    assert_eq!((2,0,1), bcd(201));
-    assert_eq!((1,0,1), bcd(101));
-    assert_eq!((1,3,9), bcd(139));
+    assert_eq!((2, 3, 4), bcd(234));
+    assert_eq!((0, 0, 4), bcd(4));
+    assert_eq!((2, 0, 1), bcd(201));
+    assert_eq!((1, 0, 1), bcd(101));
+    assert_eq!((1, 3, 9), bcd(139));
 }
 
 impl Cpu {
@@ -141,7 +141,7 @@ impl Cpu {
                     *self.reg(Reg::VF) = 1;
                 }
             }
-            &Opcode::ShiftRight(x, y) => {
+            &Opcode::ShiftRight(x, _) => {
                 *self.reg(Reg::VF) = *self.reg(x) & 0x1;
                 *self.reg(x) = *self.reg(x) >> 1;
             }
@@ -154,7 +154,7 @@ impl Cpu {
                     *self.reg(Reg::VF) = 1;
                 }
             }
-            &Opcode::ShiftLeft(x, y) => {
+            &Opcode::ShiftLeft(x, _) => {
                 *self.reg(Reg::VF) = *self.reg(x) >> 7 & 0x1;
                 *self.reg(x) = *self.reg(x) << 1;
             }
@@ -231,11 +231,7 @@ impl Cpu {
     }
 
     pub fn timer(&mut self, ticks: u64) {
-        let clock_ticks = if ticks > 0xFF {
-            0xFF
-        } else {
-            ticks as u8
-        };
+        let clock_ticks = if ticks > 0xFF { 0xFF } else { ticks as u8 };
         if clock_ticks >= self.delay {
             self.delay = 0;
         } else {
@@ -251,7 +247,9 @@ impl Cpu {
     pub fn run_cycle(&mut self, interconnect: &mut Interconnect) {
         let instr = interconnect.read_halfword(self.pc);
         let opcode = disassemble(instr).unwrap();
-        debug!(self.logger, "run_cycle"; "opcode" => format!("{}", opcode), "pc" => format!("0x{:04x}", self.pc));
+        debug!(self.logger, "run_cycle";
+               "opcode" => format!("{}", opcode),
+               "pc" => format!("0x{:04x}", self.pc));
         self.pc += 2; // We moved two bytes
         self.execute_opcode(&opcode, interconnect);
     }
@@ -259,7 +257,12 @@ impl Cpu {
 
 impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "CPU: PC:0x{:04x} SP:{} Delay:{} Sound:{}", self.pc, self.sp, self.delay, self.sound)?;
+        writeln!(f,
+                 "CPU: PC:0x{:04x} SP:{} Delay:{} Sound:{}",
+                 self.pc,
+                 self.sp,
+                 self.delay,
+                 self.sound)?;
         writeln!(f, "\tstack: {:?}", self.stack)?;
         for i in 0..0x10 {
             let ireg = reg(i);

@@ -19,25 +19,6 @@ use std::path::PathBuf;
 use clap::{Arg, App};
 use slog::DrainExt;
 
-const HEXDUMP_COLS: usize = 16;
-
-fn mem_dump(mem: &[u8], start_offset: usize) {
-    let max_bytes = HEXDUMP_COLS * 16; //rows
-    let mut spacer;
-    for (idx, byte) in mem.iter().enumerate().take(max_bytes) {
-        if idx % HEXDUMP_COLS == 0 {
-            let addr = idx + start_offset;
-            print!("\n0x{:08x}:\t", addr);
-        }
-        if idx % 2 == 0 {
-            spacer = ""
-        } else {
-            spacer = " "
-        }
-        print!("{:02x}{}", byte, spacer);
-    }
-    println!();
-}
 
 fn main() {
     let log = slog::Logger::root(slog_term::streamer().full().build().fuse(),
@@ -55,11 +36,11 @@ fn main() {
             .takes_value(true)
             .required(true))
         .arg(Arg::with_name("debugger")
-             .short("d")
-             .help("Run this ROM with the console debugger"))
+            .short("d")
+            .help("Run this ROM with the console debugger"))
         .arg(Arg::with_name("disassemble")
-             .short("p")
-             .help("Dump the instructions for this ROM"))
+            .short("p")
+            .help("Dump the instructions for this ROM"))
         .get_matches();
 
     let rom_path = matches.value_of("rom_path").unwrap(); //Required arg

@@ -2,8 +2,6 @@
 // Rust Core Imports
 //
 use std::path::PathBuf;
-use std::fs;
-use std::io::Read;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,7 +14,7 @@ use std::io;
 use slog;
 use slog_stdlog;
 use slog::DrainExt;
-use minifb::{WindowOptions, Window, Key, KeyRepeat, Scale};
+use minifb::{WindowOptions, Window, Key, Scale};
 
 //
 // This Crate Imports
@@ -25,10 +23,15 @@ use errors::*;
 use cpu;
 use interconnect::{Interconnect, SCREEN_WIDTH, SCREEN_HEIGHT};
 
+pub const SCREEN_SCALE: usize = 16; // Should be power of 2
+pub const DISPLAY_WIDTH: usize = SCREEN_WIDTH * SCREEN_SCALE;
+pub const DISPLAY_HEIGHT: usize = SCREEN_HEIGHT * SCREEN_SCALE;
+pub const DISPLAY_SIZE: usize = DISPLAY_HEIGHT * DISPLAY_WIDTH;
 pub const PROGRAM_START: usize = 0x200;
 pub const NS_IN_SECOND: u64 = 1000000000;
 pub const CPU_CYCLE_NS: u64 = 2000000; //500Hz
 pub const TIMER_CYCLE_NS: u64 = 16666667;
+const HEXDUMP_COLS: usize = 16;
 pub type MemAddr = u16;
 
 /// The interface to the core Chip8 system.
@@ -41,7 +44,6 @@ pub struct Chip8 {
     cpu_cycles: u64,
     timer_ticks: u64,
     debug_mode: bool,
-    breakpoints: Vec<u16>,
 }
 
 fn key_map(key: Key) -> Option<usize> {
@@ -82,15 +84,14 @@ impl Chip8 {
             timer_ticks: 0,
             debug_mode: false,
             start_time: Instant::now(),
-            breakpoints: Vec::new(),
             window: Window::new("Chip8",
-                                SCREEN_WIDTH,
-                                SCREEN_HEIGHT,
+                                DISPLAY_WIDTH,
+                                DISPLAY_HEIGHT,
                                 WindowOptions {
                                     borderless: false,
                                     title: true,
                                     resize: false,
-                                    scale: Scale::X32,
+                                    scale: Scale::X1,
                                 })
                 .unwrap(),
         }
@@ -106,7 +107,7 @@ impl Chip8 {
     pub fn run(&mut self) {
         self.start_time = Instant::now();
         let naptime = Duration::from_millis(3);
-        let mut buffer = [0u32; SCREEN_HEIGHT * SCREEN_WIDTH];
+        let mut buffer = [0u32; DISPLAY_SIZE]; // TODO box it
 
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
             let emulation_time = self.start_time.elapsed();
@@ -131,7 +132,7 @@ impl Chip8 {
                     debug!(self.logger, "debug_cpu"; "keys" => self.interconnect.display_keys());
                     println!("{}", self.cpu);
                     for i in -5..10 {
-                        let memaddr = (self.cpu.pc as isize + 2*i) as u16;
+                        let memaddr = (self.cpu.pc as isize + 2 * i) as u16;
                         let instr = self.interconnect.read_halfword(memaddr);
                         if i == 0 {
                             print!("-->");
@@ -175,6 +176,24 @@ impl Chip8 {
         }
     }
 
+
+    pub fn mem_dump(mem: &[u8], start_offset: usize) {
+        let max_bytes = HEXDUMP_COLS * 16; //rows
+        let mut spacer;
+        for (idx, byte) in mem.iter().enumerate().take(max_bytes) {
+            if idx % HEXDUMP_COLS == 0 {
+                let addr = idx + start_offset;
+                print!("\n0x{:08x}:\t", addr);
+            }
+            if idx % 2 == 0 {
+                spacer = ""
+            } else {
+                spacer = " "
+            }
+            print!("{:02x}{}", byte, spacer);
+        }
+        println!();
+    }
     pub fn set_debug(&mut self, status: bool) {
         self.debug_mode = status;
     }
@@ -190,9 +209,19 @@ impl Chip8 {
         }
     }
 
-    fn draw_screen(&mut self, buffer: &mut [u32; SCREEN_WIDTH * SCREEN_HEIGHT]) {
-        for (idx, pixel) in self.interconnect.graphics.iter().enumerate() {
-            buffer[idx] = if *pixel { 0x00ffffff } else { 0 };
+    fn draw_screen(&mut self, buffer: &mut [u32; DISPLAY_SIZE]) {
+        for dy in 0..DISPLAY_HEIGHT {
+            let sy = dy / SCREEN_SCALE;
+            for dx in 0..DISPLAY_WIDTH {
+                let sx = dx / SCREEN_SCALE;
+                let display_index = dy * DISPLAY_WIDTH + dx;
+                let screen_index = sy * SCREEN_WIDTH + sx;
+                buffer[display_index] = if self.interconnect.graphics[screen_index] {
+                    0x00ffffff
+                } else {
+                    0
+                };
+            }
         }
         self.window.update_with_buffer(buffer);
     }
