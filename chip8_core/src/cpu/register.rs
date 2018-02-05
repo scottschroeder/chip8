@@ -1,17 +1,4 @@
-//
-// Rust Core Imports
-//
 use std::fmt;
-
-//
-// Third Party Imports
-//
-
-//
-// This Crate Imports
-//
-//use errors::*;
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum Reg {

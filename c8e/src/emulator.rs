@@ -1,42 +1,36 @@
 //
 // Rust Core Imports
 //
+use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-//TODO REMOVE
 use std::io;
 
 //
 // Third Party Imports
 //
-use slog;
-use slog_stdlog;
-use slog::DrainExt;
-use minifb::{WindowOptions, Window, Key, Scale};
+use minifb::{Key, Scale, Window, WindowOptions};
 
 //
 // This Crate Imports
 //
-use errors::*;
-use cpu;
-use interconnect::{Interconnect, SCREEN_WIDTH, SCREEN_HEIGHT};
+use chip8_core::cpu;
+use chip8_core::interconnect::{Interconnect, SCREEN_HEIGHT, SCREEN_WIDTH};
 
-pub const SCREEN_SCALE: usize = 16; // Should be power of 2
-pub const DISPLAY_WIDTH: usize = SCREEN_WIDTH * SCREEN_SCALE;
-pub const DISPLAY_HEIGHT: usize = SCREEN_HEIGHT * SCREEN_SCALE;
-pub const DISPLAY_SIZE: usize = DISPLAY_HEIGHT * DISPLAY_WIDTH;
-pub const PROGRAM_START: usize = 0x200;
-pub const NS_IN_SECOND: u64 = 1000000000;
-pub const CPU_CYCLE_NS: u64 = 2000000; //500Hz
-pub const TIMER_CYCLE_NS: u64 = 16666667;
+const SCREEN_SCALE: usize = 16; // Must be power of 2;
+const DISPLAY_WIDTH: usize = SCREEN_WIDTH * SCREEN_SCALE;
+const DISPLAY_HEIGHT: usize = SCREEN_HEIGHT * SCREEN_SCALE;
+const DISPLAY_SIZE: usize = DISPLAY_HEIGHT * DISPLAY_WIDTH;
+const NS_IN_SECOND: u64 = 1000000000;
+const CPU_CYCLE_NS: u64 = 2000000; //500Hz
+const TIMER_CYCLE_NS: u64 = 16666667;
 const HEXDUMP_COLS: usize = 16;
-pub type MemAddr = u16;
 
 /// The interface to the core Chip8 system.
 pub struct Chip8 {
-    logger: slog::Logger,
     cpu: cpu::Cpu,
     interconnect: Interconnect,
     window: Window,
@@ -71,37 +65,36 @@ fn key_map(key: Key) -> Option<usize> {
 impl Chip8 {
     /// Initialize the `Chip8` system
     ///
-    /// `logger = None`, will use the standard `log` crate.
-    pub fn init(logger: Option<slog::Logger>) -> Self {
-        let emu_logger = logger.unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
-        let cpu_logger = emu_logger.new(o!("device" => "cpu"));
-        let int_logger = emu_logger.new(o!("device" => "interconnect"));
+    pub fn init() -> Self {
         Chip8 {
-            logger: emu_logger,
-            cpu: cpu::Cpu::init(cpu_logger),
-            interconnect: Interconnect::init(int_logger),
+            cpu: cpu::Cpu::init(),
+            interconnect: Interconnect::init(),
             cpu_cycles: 0,
             timer_ticks: 0,
             debug_mode: false,
             start_time: Instant::now(),
-            window: Window::new("Chip8",
-                                DISPLAY_WIDTH,
-                                DISPLAY_HEIGHT,
-                                WindowOptions {
-                                    borderless: false,
-                                    title: true,
-                                    resize: false,
-                                    scale: Scale::X1,
-                                })
-                .unwrap(),
+            window: Window::new(
+                "Chip8",
+                DISPLAY_WIDTH,
+                DISPLAY_HEIGHT,
+                WindowOptions {
+                    borderless: false,
+                    title: true,
+                    resize: false,
+                    scale: Scale::X1,
+                },
+            ).unwrap(),
         }
     }
 
     /// Load a Chip8 ROM from the filesystem
-    pub fn load_rom(&mut self, path: PathBuf) -> Result<usize> {
-        self.interconnect.load_rom(path)
+    pub fn load_rom(&mut self, path: PathBuf) -> Result<usize, io::Error> {
+        let mut program_mem = self.interconnect.program_mem();
+        let mut file = fs::File::open(&path)?;
+        let bytes = file.read(&mut program_mem)?;
+        info!("load_rom: file {} size {}", path.display(), bytes);
+        Ok(bytes)
     }
-
 
     /// Run the emulator
     pub fn run(&mut self) {
@@ -111,15 +104,13 @@ impl Chip8 {
 
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
             let emulation_time = self.start_time.elapsed();
-            let emulation_ns = emulation_time.as_secs() * NS_IN_SECOND +
-                               emulation_time.subsec_nanos() as u64;
+            let emulation_ns =
+                emulation_time.as_secs() * NS_IN_SECOND + emulation_time.subsec_nanos() as u64;
             let ideal_cpu_cycles = emulation_ns / CPU_CYCLE_NS;
             let ideal_timer_ticks = emulation_ns / TIMER_CYCLE_NS;
 
-
             self.cpu.timer(ideal_timer_ticks - self.timer_ticks);
             self.timer_ticks = ideal_timer_ticks;
-
 
             if !self.debug_mode {
                 self.update_keys();
@@ -129,7 +120,7 @@ impl Chip8 {
                 //     self.debug_mode = true;
                 // }
                 if self.debug_mode {
-                    debug!(self.logger, "debug_cpu"; "keys" => self.interconnect.display_keys());
+                    debug!("{}", self.interconnect.keys);
                     println!("{}", self.cpu);
                     for i in -5..10 {
                         let memaddr = (self.cpu.pc as isize + 2 * i) as u16;
@@ -157,11 +148,10 @@ impl Chip8 {
                             } else {
                                 self.interconnect.set_key(x);
                             }
-                        }
+                        },
                         Err(e) => {
                             println!("{:?}", e);
-                        }
-
+                        },
                     }
                 }
                 self.cpu.run_cycle(&mut self.interconnect);
@@ -175,7 +165,6 @@ impl Chip8 {
             thread::sleep(naptime);
         }
     }
-
 
     pub fn mem_dump(mem: &[u8], start_offset: usize) {
         let max_bytes = HEXDUMP_COLS * 16; //rows
@@ -227,6 +216,8 @@ impl Chip8 {
     }
 
     pub fn disassemble(&self, total: usize) {
+        // TODO kill
+        let PROGRAM_START = 0x200;
         let mut idx = PROGRAM_START;
         while idx + 1 < total + PROGRAM_START {
             let instr = self.interconnect.read_halfword(idx as _);
@@ -237,6 +228,5 @@ impl Chip8 {
                 Err(e) => println!("UNKNOWN {}", e),
             }
         }
-
     }
 }

@@ -1,0 +1,11 @@
+[package]
+name = "c8e"
+version = "0.1.0"
+authors = ["Scott Schroeder <scottschroeder@sent.com>"]
+
+[dependencies]
+chip8_core = { path = "../chip8_core" }
+clap = "2.22.0"
+pretty_env_logger = "0.2.0"
+log = "0.4.1"
+minifb = "0.9.0"

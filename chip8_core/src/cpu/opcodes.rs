@@ -10,7 +10,7 @@ use std::fmt;
 //
 // This Crate Imports
 //
-use errors::*;
+use errors;
 use super::MemAddr;
 use cpu::register::{Reg, reg};
 
@@ -75,7 +75,7 @@ fn nibbles2addr(a: u8, b: u8, c: u8) -> MemAddr {
     x
 }
 
-pub fn disassemble(instr: u16) -> Result<Opcode> {
+pub fn disassemble(instr: u16) -> Result<Opcode, errors::Chip8Error> {
 
     match halfword2nibbles(instr) {
         (0x0, 0, 0xE, 0) => Ok(Opcode::ClearScreen),
@@ -113,7 +113,7 @@ pub fn disassemble(instr: u16) -> Result<Opcode> {
         (0xF, x, 0x3, 0x3) => Ok(Opcode::BCD(reg(x))),
         (0xF, x, 0x5, 0x5) => Ok(Opcode::RegDump(reg(x))),
         (0xF, x, 0x6, 0x5) => Ok(Opcode::RegLoad(reg(x))),
-        _ => bail!(ErrorKind::UnrecognizedOpcode(instr)),
+        _ => Err(errors::Chip8Error::UnrecognizedOpcode(instr))
     }
 }
 impl fmt::Display for Opcode {

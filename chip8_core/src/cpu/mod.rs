@@ -6,7 +6,6 @@ use std::fmt;
 //
 // Third Party Imports
 //
-use slog;
 use rand;
 
 //
@@ -21,8 +20,7 @@ mod register;
 pub use self::opcodes::disassemble;
 pub use self::opcodes::Opcode;
 pub use self::register::{Reg, reg};
-use emulator::{MemAddr, PROGRAM_START};
-use interconnect::Interconnect;
+use interconnect::{Interconnect, MemAddr, PROGRAM_START};
 
 
 #[derive(Debug)]
@@ -34,7 +32,6 @@ pub struct Cpu {
     sp: usize,
     delay: u8,
     sound: u8,
-    logger: slog::Logger,
 }
 
 fn bcd(n: u8) -> (u8, u8, u8) {
@@ -56,7 +53,7 @@ fn check_bcd() {
 }
 
 impl Cpu {
-    pub fn init(logger: slog::Logger) -> Self {
+    pub fn init() -> Self {
         Cpu {
             gpregs: [0u8; 16],
             stack: [0u16; 16],
@@ -65,7 +62,6 @@ impl Cpu {
             sp: 0,
             delay: 0,
             sound: 0,
-            logger: logger,
         }
     }
 
@@ -81,6 +77,7 @@ impl Cpu {
                 self.sp -= 1;
                 self.pc = self.stack[self.sp];
             }
+            // TODO Disable panic in release build
             &Opcode::SysAddr(addr) => panic!("SysAddr({:04x}) Opcode not Implemented", addr),
             &Opcode::JumpAddr(addr) => self.pc = addr,
             &Opcode::CallAddr(addr) => {
@@ -247,9 +244,7 @@ impl Cpu {
     pub fn run_cycle(&mut self, interconnect: &mut Interconnect) {
         let instr = interconnect.read_halfword(self.pc);
         let opcode = disassemble(instr).unwrap();
-        debug!(self.logger, "run_cycle";
-               "opcode" => format!("{}", opcode),
-               "pc" => format!("0x{:04x}", self.pc));
+        debug!("run_cycle opcode {} pc 0x{:04x}", opcode, self.pc);
         self.pc += 2; // We moved two bytes
         self.execute_opcode(&opcode, interconnect);
     }
